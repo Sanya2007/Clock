@@ -1,124 +1,93 @@
-module reg_write(
-	input	logic	clk,
-	input	logic	rst,
-	input	logic	[23:0] data,
-	input	logic	d_valid,
-	output	logic	st_cp,
-	output	logic	sh_cp,
-	output	logic	d
+module reg_write
+(
+	input	logic			i_CLK	,
+	input	logic			i_RST	,
+	input	logic	[23:0]	i_DATA	,
+	input	logic			i_VALID	,
+	output	logic			o_ST_CP	,
+	output	logic			o_SH_CP	,
+	output	logic			o_DATA	
 );
 	
 	
-	logic	[23:0] data_int;
-	logic	sh_cp_int;
-	logic	cnt_en;
-	logic	[5:0] cnt;
-	logic	done;
+	logic	[23:0]	data;
+	logic			valid_del;
+	logic			sh_cp_en;
+	logic			st_cp_en;
+	logic	[5:0]	cnt;
 	
-	assign d = data_int[23];
-	assign sh_cp = sh_cp_int;
-	
-	
+	assign o_DATA = data[23];
+	assign o_SH_CP = cnt[0];
+
 	//////////////////////////////////////////////////////////////////////////////
 	// Internal register for storing and shifting the data
 	//////////////////////////////////////////////////////////////////////////////
-	always_ff @(posedge clk)
-	begin
-		if(rst)
+	always_ff @(posedge i_CLK)
 		begin
-			data_int <= '0;
-		end else
-		begin
-			if(d_valid)
-			begin
-				data_int <= data;
-			end
-			else if(sh_cp_int)
-			begin
-				data_int <= {data_int[22:0], 1'b0};
-			end
+			if(i_RST)
+				begin
+					data <= '0;
+					valid_del <= 1'b0;
+					sh_cp_en <= 1'b0;
+					st_cp_en <= 1'b0;
+				end
+			else
+				begin
+					valid_del <= i_VALID;
+					if((i_VALID ^ valid_del) && !i_VALID)
+						begin
+							sh_cp_en <= 1'b1;
+						end
+					else if(cnt[5:1] == 23 && cnt[0])
+						begin
+							sh_cp_en <= 0;
+						end
+					
+					if(i_VALID)
+						begin
+							data <= i_DATA;
+						end
+					else if(sh_cp_en && cnt[0])
+						begin
+							data <= data << 1;
+						end
+					
+					if(st_cp_en && cnt[5:1] == 24)
+						begin
+							o_ST_CP <= 1'b1;
+						end
+					else
+						begin
+							o_ST_CP <= 1'b0;
+						end
+
+					if(i_VALID)
+						begin
+							st_cp_en <= 1'b1;
+						end
+					else if(cnt[5:1] == 24)
+						begin
+							st_cp_en <= 1'b0;							
+						end
+				end
 		end
-	end
-	//////////////////////////////////////////////////////////////////////////////
-	
-	
-	//////////////////////////////////////////////////////////////////////////////
-	// Clock for shifting the data through the external registers
-	//////////////////////////////////////////////////////////////////////////////
-	always_ff @(posedge clk)
-	begin
-		if(rst)
-		begin
-			sh_cp_int <= 1'b0;
-		end else if(cnt_en)
-		begin
-			sh_cp_int <= ~sh_cp_int;
-		end
-	end
 	//////////////////////////////////////////////////////////////////////////////
 	
 	
 	//////////////////////////////////////////////////////////////////////////////
 	// Counter that control the number of bits shifted
 	//////////////////////////////////////////////////////////////////////////////
-	always_ff @(posedge clk)
-	begin
-		if(rst)
+	always_ff @(posedge i_CLK)
 		begin
-			cnt_en <= 1'b0;
-			cnt <= '0;
-			done <= 1'b0;
-		end else
-		begin
-			if(d_valid)
-			begin
-				cnt_en <= 1'b1;
-			end else if(done)
-			begin
-				cnt_en <= 1'b0;
-			end
-			
-			if(cnt_en && !done)
-			begin
-				cnt <= cnt + 1;
-			end else
-			begin
-				cnt <= '0;
-			end
-			
-			if(!cnt_en)
-			begin
-				done <= 1'b0;
-			end else if(cnt == 46)
-			begin
-				done <= 1'b1;
-			end
+			if(i_RST || i_VALID)
+				begin
+					cnt <= '0;
+				end
+			else if(sh_cp_en) 
+				begin
+					cnt <= cnt + 1;
+				end
 		end
-	end
 	//////////////////////////////////////////////////////////////////////////////
-	
-	
-	//////////////////////////////////////////////////////////////////////////////
-	// Clock for latching the data in the external shift register to the ouputs
-	//////////////////////////////////////////////////////////////////////////////
-	always_ff @(posedge clk)
-	begin
-		if(rst)
-		begin
-			st_cp <= 1'b0;
-		end else
-		begin
-			if(!cnt_en && done)
-			begin
-				st_cp <= 1'b1;
-			end else
-			begin
-				st_cp <= 1'b0;
-			end
-			
-		end
-	end
-	//////////////////////////////////////////////////////////////////////////////
-	
 	
 endmodule
