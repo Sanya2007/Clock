@@ -1,14 +1,18 @@
-module decoder(
-	input	logic	clk,
-	input	logic	rst,
-	input	logic	clk_slow,
-	input	logic	[3:0] hour_units,
-	input	logic	[1:0] hour_tens,
-	input	logic	[3:0] min_units,
-	input	logic	[2:0] min_tens,
-	input	logic	sec_en,
-	output	logic	[23:0] data,
-	output	logic	d_valid
+module decoder
+(
+	input	logic			i_CLK		,
+	input	logic			i_RST		,
+	input	logic			i_VALID		,
+
+	input	logic			i_SET		,
+	input	logic	[3:0]	i_HR_U		,
+	input	logic	[1:0]	i_HR_T		,
+	input	logic	[3:0]	i_MN_U		,
+	input	logic	[2:0]	i_MN_T		,
+	input	logic			i_SEC		,
+
+	output	logic	[23:0]	o_DATA		,
+	output	logic			o_VALID		
 );
 	
 	localparam	C_7S_ZERO	= 8'b0001_1000;
@@ -23,258 +27,174 @@ module decoder(
 	localparam	C_7S_NINE	= 8'b0000_1001;
 	localparam	C_7S_BLANK	= 8'b1111_1111;
 	
-	logic	[7:0] hour_units_reg;
-	logic	[7:0] hour_tens_reg;
-	logic	[7:0] min_units_reg;
-	logic	[7:0] min_tens_reg;
-	logic	[7:0] [7:0] sec_reg;
+	logic	[7:0]	hour_units;
+	logic	[7:0]	hour_tens;
+	logic	[7:0]	min_units;
+	logic	[7:0]	min_tens;
+	logic			valid_int;
+	logic	[7:0]	led_reg;
+	logic	[7:0]	digit_reg;
+	logic	[7:0]	sel_reg;
+	logic	[7:0]	row_led_on;
+	logic	[7:0]	col_led_on;
+	logic			led_on;
+	logic	[7:0]	curr_led;
+	logic	[5:0]	cnt;
+
 	
-	logic	[7:0] sel_reg;
-	logic	[2:0][7:0] data_int;
-	logic	sel_en;
-	logic	data_en;
-	logic	clk_slow_del;
 	
 	
 	//////////////////////////////////////////////////////////////////////////////
 	//
 	//////////////////////////////////////////////////////////////////////////////
-	always_ff @(posedge clk)
-	begin
-		if(rst)
+	always_ff @(posedge i_CLK)
 		begin
-			clk_slow_del <= 1'b0;
-			sel_en <= 1'b0;
-			data_en <= 1'b0;
-			d_valid <= 1'b0;
-		end else
-		begin
-			clk_slow_del <= clk_slow;
-			
-			if(!clk_slow && clk_slow_del)
-			begin
-				sel_en <= 1'b1;
-			end else
-			begin
-				sel_en <= 1'b0;
-			end
-			
-			data_en <= sel_en;
-			d_valid <= data_en;
+			if(i_RST)
+				begin
+					valid_int <= 1'b0;
+					o_VALID <= 1'b0;
+				end
+			else
+				begin
+					valid_int <= i_VALID;
+					o_VALID <= valid_int;
+				end
 		end
-	end
 	//////////////////////////////////////////////////////////////////////////////
 	
-	
-	//////////////////////////////////////////////////////////////////////////////
-	//
-	//////////////////////////////////////////////////////////////////////////////
-	always_ff @(posedge clk)
-	begin
-		if(rst)
+	always_ff @(posedge i_CLK)
 		begin
-			data <= '0;
-		end else if(data_en)
-		begin
-			data <= data_int;
+			if(i_RST)
+				begin
+					o_DATA <= 0;
+				end
+			else if(valid_int)
+				begin
+					o_DATA[7:0] <= led_reg;
+					o_DATA[15:8] <= digit_reg;
+					o_DATA[23:16] <= sel_reg;
+				end
 		end
-	end
+
+	//////////////////////////////////////////////////////////////////////////////
+	// Select current 7S digit and row of LEDs
+	//////////////////////////////////////////////////////////////////////////////
+	always_ff @(posedge i_CLK)
+		begin
+			if(i_RST)
+				begin
+					sel_reg <= 8'd1;
+				end
+			else if(i_VALID)
+				begin
+					sel_reg <= {sel_reg[6:0], sel_reg[7]};
+				end
+		end
 	//////////////////////////////////////////////////////////////////////////////
 	
-	
+
 	//////////////////////////////////////////////////////////////////////////////
-	//
+	// LED select register
 	//////////////////////////////////////////////////////////////////////////////
 	always_comb
-	begin
-		case(sel_reg)
-			8'd1:
-			begin
-				data_int[0] = {sec_reg[7][0], sec_reg[6][0], sec_reg[5][0], sec_reg[4][0], sec_reg[3][0], sec_reg[2][0], sec_reg[1][0], sec_reg[0][0]};
-				data_int[1] = '1;
-			end
-			8'd2:
-			begin
-				data_int[0] = {sec_reg[7][1], sec_reg[6][1], sec_reg[5][1], sec_reg[4][1], sec_reg[3][1], sec_reg[2][1], sec_reg[1][1], sec_reg[0][1]};
-				data_int[1] = '1;
-			end
-			8'd4:
-			begin
-				data_int[0] = {sec_reg[7][2], sec_reg[6][2], sec_reg[5][2], sec_reg[4][2], sec_reg[3][2], sec_reg[2][2], sec_reg[1][2], sec_reg[0][2]};
-				data_int[1] = '1;
-			end
-			8'd8:
-			begin
-				data_int[0] = {sec_reg[7][3], sec_reg[6][3], sec_reg[5][3], sec_reg[4][3], sec_reg[3][3], sec_reg[2][3], sec_reg[1][3], sec_reg[0][3]};
-				data_int[1] = '1;
-			end
-			8'd16:
-			begin
-				data_int[0] = {sec_reg[7][4], sec_reg[6][4], sec_reg[5][4], sec_reg[4][4], sec_reg[3][4], sec_reg[2][4], sec_reg[1][4], sec_reg[0][4]};
-				data_int[1] = min_units_reg;
-			end
-			8'd32:
-			begin
-				data_int[0] = {sec_reg[7][5], sec_reg[6][5], sec_reg[5][5], sec_reg[4][5], sec_reg[3][5], sec_reg[2][5], sec_reg[1][5], sec_reg[0][5]};
-				data_int[1] = min_tens_reg;
-			end
-			8'd64:
-			begin
-				data_int[0] = {sec_reg[7][6], sec_reg[6][6], sec_reg[5][6], sec_reg[4][6], sec_reg[3][6], sec_reg[2][6], sec_reg[1][6], sec_reg[0][6]};
-				data_int[1] = hour_units_reg;
-			end
-			8'd128:
-			begin
-				data_int[0] = {sec_reg[7][7], sec_reg[6][7], sec_reg[5][7], sec_reg[4][7], sec_reg[3][7], sec_reg[2][7], sec_reg[1][7], sec_reg[0][7]};
-				data_int[1] = hour_tens_reg;
-			end
-			default:
-			begin
-				data_int[0] = '1;
-				data_int[1] = '1;
-			end
-		endcase
-		data_int[2] = sel_reg;
-	end
-	//////////////////////////////////////////////////////////////////////////////
-	
-	
-	//////////////////////////////////////////////////////////////////////////////
-	// Select shift register
-	//////////////////////////////////////////////////////////////////////////////
-	always_ff @(posedge clk)
-	begin
-		if(rst)
 		begin
-			sel_reg <= 8'd1;
-		end else if(sel_en)
-		begin
-			sel_reg <= {sel_reg[6:0], sel_reg[7]};
+			led_on = |(curr_led & sel_reg);
+			foreach(led_reg[i])
+				begin
+					led_reg[i] = ~(row_led_on[i] | (col_led_on[i] & led_on));
+				end
 		end
-	end
 	//////////////////////////////////////////////////////////////////////////////
 	
-	
-	//////////////////////////////////////////////////////////////////////////////
-	// Seconds shift register
-	//////////////////////////////////////////////////////////////////////////////
-	always_ff @(posedge clk)
-	begin
-		if(rst)
+	always_ff @(posedge i_CLK)
 		begin
-			sec_reg <= '0;
-		end else if(sec_en)
-		begin
-			if(sec_en)
-			begin
-				sec_reg <= 64'd1;
-			end else
-			begin
-				sec_reg <= {sec_reg, 1'b1};
-			end
+			if(i_RST || i_SET)
+				begin
+					cnt <= 0;
+					row_led_on <= 0;
+					col_led_on <= 1;
+					curr_led <= 1;
+				end
+			else if(i_VALID && i_SEC)
+				begin
+					if(cnt == 59)
+						begin
+							row_led_on <= 0;
+							curr_led <= 1;
+							col_led_on <= 1;
+							cnt <= 0;
+						end
+					else 
+						begin
+							cnt <= cnt + 1;
+							if(cnt[2:0] == 7)
+								begin
+									row_led_on <= {row_led_on[6:0], 1'b1};
+									col_led_on <= col_led_on << 1;
+									curr_led <= 1;
+								end
+							else
+								begin
+									curr_led <= {curr_led[6:0], 1'b1};
+								end
+						end
+				end
 		end
-	end
-	//////////////////////////////////////////////////////////////////////////////
 	
-	
+
 	//////////////////////////////////////////////////////////////////////////////
-	// Minutes tens into 7-segment display convertion
+	// Minute tens into 7-segment display convertion
 	//////////////////////////////////////////////////////////////////////////////
-	always_ff @(posedge clk)
-	begin
-		if(rst)
+	always_comb
 		begin
-			min_tens_reg <= '0;
-		end else if(sec_en)
-		begin
-			case(min_tens)
-				3'd0: min_tens_reg <= C_7S_ZERO;
-				3'd1: min_tens_reg <= C_7S_ONE;
-				3'd2: min_tens_reg <= C_7S_TWO;
-				3'd3: min_tens_reg <= C_7S_THREE;
-				3'd4: min_tens_reg <= C_7S_FOUR;
-				3'd5: min_tens_reg <= C_7S_FIVE;
-				default: min_tens_reg <= C_7S_BLANK;
+			unique case(i_MN_T)
+				3'd0: min_tens = C_7S_ZERO;
+				3'd1: min_tens = C_7S_ONE;
+				3'd2: min_tens = C_7S_TWO;
+				3'd3: min_tens = C_7S_THREE;
+				3'd4: min_tens = C_7S_FOUR;
+				default: min_tens = C_7S_FIVE;
+			endcase
+			
+			unique case(i_MN_U)
+				4'd0: min_units = C_7S_ZERO;
+				4'd1: min_units = C_7S_ONE;
+				4'd2: min_units = C_7S_TWO;
+				4'd3: min_units = C_7S_THREE;
+				4'd4: min_units = C_7S_FOUR;
+				4'd5: min_units = C_7S_FIVE;
+				4'd6: min_units = C_7S_SIX;
+				4'd7: min_units = C_7S_SEVEN;
+				4'd8: min_units = C_7S_EIGHT;
+				default: min_units = C_7S_NINE;
+			endcase
+					
+			unique case(i_HR_T)
+				3'd0: hour_tens = C_7S_BLANK;
+				3'd1: hour_tens = C_7S_ONE;
+				default: hour_tens = C_7S_TWO;
+			endcase
+		
+			unique case(i_HR_U)
+				4'd0: hour_units = C_7S_ZERO;
+				4'd1: hour_units = C_7S_ONE;
+				4'd2: hour_units = C_7S_TWO;
+				4'd3: hour_units = C_7S_THREE;
+				4'd4: hour_units = C_7S_FOUR;
+				4'd5: hour_units = C_7S_FIVE;
+				4'd6: hour_units = C_7S_SIX;
+				4'd7: hour_units = C_7S_SEVEN;
+				4'd8: hour_units = C_7S_EIGHT;
+				default: hour_units = C_7S_NINE;
+			endcase
+
+			unique case(sel_reg)
+				8'd16: digit_reg = hour_tens;
+				8'd32: digit_reg = hour_units;
+				8'd64: digit_reg = min_tens;
+				default: digit_reg = min_units;
 			endcase
 		end
-	end
-	//////////////////////////////////////////////////////////////////////////////
-	
-	
-	//////////////////////////////////////////////////////////////////////////////
-	// Minutes units into 7-segment display convertion
-	//////////////////////////////////////////////////////////////////////////////
-	always_ff @(posedge clk)
-	begin
-		if(rst)
-		begin
-			min_units_reg <= '0;
-		end else if(sec_en)
-		begin
-			case(min_units)
-				4'd0: min_units_reg <= C_7S_ZERO;
-				4'd1: min_units_reg <= C_7S_ONE;
-				4'd2: min_units_reg <= C_7S_TWO;
-				4'd3: min_units_reg <= C_7S_THREE;
-				4'd4: min_units_reg <= C_7S_FOUR;
-				4'd5: min_units_reg <= C_7S_FIVE;
-				4'd6: min_units_reg <= C_7S_SIX;
-				4'd7: min_units_reg <= C_7S_SEVEN;
-				4'd8: min_units_reg <= C_7S_EIGHT;
-				4'd9: min_units_reg <= C_7S_NINE;
-				default: min_units_reg <= C_7S_BLANK;
-			endcase
-		end
-	end
-	//////////////////////////////////////////////////////////////////////////////
-	
-	
-		//////////////////////////////////////////////////////////////////////////////
-	// Minutes tens into 7-segment display convertion
-	//////////////////////////////////////////////////////////////////////////////
-	always_ff @(posedge clk)
-	begin
-		if(rst)
-		begin
-			hour_tens_reg <= '0;
-		end else if(sec_en)
-		begin
-			case(hour_tens)
-				3'd0: hour_tens_reg <= C_7S_BLANK;
-				3'd1: hour_tens_reg <= C_7S_ONE;
-				3'd2: hour_tens_reg <= C_7S_TWO;
-				default: hour_tens_reg <= C_7S_BLANK;
-			endcase
-		end
-	end
-	//////////////////////////////////////////////////////////////////////////////
-	
-	
-	//////////////////////////////////////////////////////////////////////////////
-	// Minutes units into 7-segment display convertion
-	//////////////////////////////////////////////////////////////////////////////
-	always_ff @(posedge clk)
-	begin
-		if(rst)
-		begin
-			hour_units_reg <= '0;
-		end else if(sec_en)
-		begin
-			case(hour_units)
-				4'd0: hour_units_reg <= C_7S_ZERO;
-				4'd1: hour_units_reg <= C_7S_ONE;
-				4'd2: hour_units_reg <= C_7S_TWO;
-				4'd3: hour_units_reg <= C_7S_THREE;
-				4'd4: hour_units_reg <= C_7S_FOUR;
-				4'd5: hour_units_reg <= C_7S_FIVE;
-				4'd6: hour_units_reg <= C_7S_SIX;
-				4'd7: hour_units_reg <= C_7S_SEVEN;
-				4'd8: hour_units_reg <= C_7S_EIGHT;
-				4'd9: hour_units_reg <= C_7S_NINE;
-				default: hour_units_reg <= C_7S_BLANK;
-			endcase
-		end
-	end
 	//////////////////////////////////////////////////////////////////////////////
 	
 endmodule

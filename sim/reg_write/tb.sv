@@ -4,11 +4,11 @@ module tb;
 
 	logic			i_CLK = 0	;
 	logic			i_RST = 0	;
-	logic	[23:0]	i_DATA	;
-	logic			i_VALID	;
-	logic			o_ST_CP	;
-	logic			o_SH_CP	;
-	logic			o_DATA	;
+	logic	[23:0]	i_DATA		;
+	logic			i_VALID		;
+	logic			o_ST_CP		;
+	logic			o_SH_CP		;
+	logic			o_DATA		;
 	
 	int cnt = 0;
 
